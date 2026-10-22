@@ -42,7 +42,7 @@ import java.util.UUID;
  * Other plugins use the cloud through {@link RexlCloudApi#getInstance()} (or {@link #getRexlCloudApi()}); declare a
  * dependency on {@code rexlcloud_proxy} so it is initialized first.
  */
-@Plugin(id = "rexlcloud_proxy", name = "rexlCloudProxy", version = "1.0.1", description = "Proxy for rexlCloud", authors = {"rexlNico"})
+@Plugin(id = "rexlcloud_proxy", name = "rexlCloudProxy", version = "1.0.0", description = "Proxy for rexlCloud", authors = {"rexlNico"})
 public class VelocityProxy {
 
     //TODO: cloud command to save temp to template

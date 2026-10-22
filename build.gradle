@@ -4,13 +4,13 @@ plugins {
 }
 
 group = 'de.rexlcloud'
-version = '1.0.1'
+version = '1.0.0'
 
 subprojects {
 
     apply plugin: 'java-library'
     apply plugin: 'com.gradleup.shadow'
-    version = '1.0.1'
+    version = '1.0.0'
 
     repositories {
         mavenCentral()

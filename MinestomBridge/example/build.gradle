@@ -1,0 +1,22 @@
+plugins {
+    id 'java'
+}
+
+group = 'de.rexlcloud'
+
+repositories {
+    mavenCentral()
+}
+
+// The smallest Minestom server for a "Custom jar" group; the end-to-end test runs it. Real servers depend on
+// de.rexlcloud:minestom-api from https://repo.rexlcloud.de/releases instead of the project.
+dependencies {
+    implementation project(path: ':MinestomBridge', configuration: 'shadow')
+    implementation 'net.minestom:minestom:2026.10.07-26.2'
+}
+
+shadowJar {
+    archiveClassifier = ''
+    manifest.attributes['Main-Class'] = 'de.rexlcloud.example.ExampleServer'
+    mergeServiceFiles()
+}

@@ -1,0 +1,142 @@
+name: Build and release
+
+# Every push to main is built and tested (unit and end-to-end tests). When the version in build.gradle has no
+# GitHub release yet, a release v<version> is created with the jars the cloud downloads (launcher, master, wrapper,
+# bridge, proxy, restmodule, each with a .sha256), and the developer APIs are published to Reposilite
+# (repo.rexlcloud.de/releases). Pull requests are only built and tested.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build and test
+        run: ./gradlew build --no-daemon
+
+      # Master, wrapper and a Paper lobby, driven through the REST API; nothing is published if it fails
+      - name: End-to-end test
+        run: |
+          sudo systemctl start mysql.service
+          mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS rexlcloud_e2e"
+          bash e2e/run.sh
+        env:
+          E2E_DIR: ${{ runner.temp }}/e2e
+
+      # New installs use the embedded H2 database; this run also keeps the servers in tmux sessions and restarts
+      # the wrapper while they run
+      - name: End-to-end test (embedded database, detached servers, BungeeCord)
+        run: |
+          command -v tmux || sudo apt-get install -y tmux
+          bash e2e/run.sh
+        env:
+          E2E_DIR: ${{ runner.temp }}/e2e-h2
+          E2E_DB_TYPE: h2
+          E2E_DETACHED: '1'
+          # The first run tests Velocity
+          E2E_PROXY: bungeecord
+
+      - name: Upload end-to-end logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-logs
+          path: |
+            ${{ runner.temp }}/e2e*/*.log
+            ${{ runner.temp }}/e2e*/wrapper/servers/temp/*/logs/latest.log
+          retention-days: 7
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(sed -n "s/^version = '\(.*\)'/\1/p" build.gradle)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Version $version is already released; bump the version in build.gradle to publish a new release."
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # module-api, bukkit-api, proxy-api and minestom-api with sources and Javadoc, for plugin and module builds
+      - name: Publish the APIs to Reposilite
+        if: github.event_name != 'pull_request' && steps.version.outputs.released == 'false'
+        run: ./gradlew publish --no-daemon
+        env:
+          SKIP_TESTS: 'true'
+          REPO_USERNAME: ${{ secrets.REPO_USERNAME }}
+          REPO_PASSWORD: ${{ secrets.REPO_PASSWORD }}
+
+      # The launcher, wrappers and master download from here: releases/latest/download/<name>.jar for the newest
+      # version, releases/download/v<version>/<name>.jar for a given one. The names stay the same in every release.
+      - name: Create the GitHub release
+        if: github.event_name != 'pull_request' && steps.version.outputs.released == 'false'
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          mkdir release
+          for project in Launcher Master Wrapper Bridge Proxy RestModule; do
+            name=$(echo "$project" | tr '[:upper:]' '[:lower:]')
+            cp "$project/build/libs/$project-$version.jar" "release/$name.jar"
+            (cd release && sha256sum "$name.jar" > "$name.jar.sha256")
+          done
+          cat > release-notes.md <<EOF
+          Start with the launcher, it downloads everything else:
+
+          \`\`\`bash
+          curl -L -o launcher.jar https://github.com/${{ github.repository }}/releases/download/v$version/launcher.jar
+          java -jar launcher.jar --master
+          \`\`\`
+
+          Guide: https://rexlcloud.de/docs/installation · APIs: \`de.rexlcloud:module-api:$version\` (and bukkit-api, proxy-api, minestom-api) on https://repo.rexlcloud.de/releases
+          EOF
+          gh release create "v$version" release/* \
+            --title "rexlCloud $version" \
+            --target "$GITHUB_SHA" \
+            --notes-file release-notes.md \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # rexlcloud.de reads the version and download links from the release and the Javadoc from Reposilite when it
+      # is built
+      - name: Redeploy rexlcloud.de
+        if: github.event_name != 'pull_request' && steps.version.outputs.released == 'false'
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.FRONTPAGE_DEPLOY_HOST }}
+          username: root
+          key: ${{ secrets.FRONTPAGE_DEPLOY_SSH_KEY }}
+          # The key may only run /usr/local/bin/deploy-rexlcloud-frontpage on the server
+          script: deploy
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: rexlcloud-jars
+          path: |
+            */build/libs/*.jar
+            !*/build/libs/*-plain.jar
+          retention-days: 14

@@ -1,0 +1,11 @@
+rootProject.name = 'rexlCloud'
+include 'Core'
+include 'Wrapper'
+include 'Master'
+include 'Proxy'
+include 'Bridge'
+include 'RestModule'
+include 'Launcher'
+
+include 'MinestomBridge'
+include 'MinestomBridge:example'

@@ -1,0 +1,6 @@
+{
+  "name": "RestModule",
+  "main": "de.rexlcloud.restmodule.RestModule",
+  "author": "rexlNico",
+  "version": "${version}"
+}

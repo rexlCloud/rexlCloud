@@ -1,0 +1,67 @@
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group = 'de.rexlcloud'
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
+}
+
+dependencies {
+    implementation project(":Core")
+    // The oldest supported API (Paper 1.8.8), so the Bridge only calls methods every version has. Its chat
+    // dependency is no longer published and not needed.
+    compileOnly('org.spigotmc:spigot-api:1.8.8-R0.1-SNAPSHOT') { transitive = false }
+
+    // Transport, buffers, framing and TLS; netty-all would add every protocol and native library
+    implementation 'io.netty:netty-handler:4.2.19.Final'
+}
+
+shadowJar {
+    dependencies {
+        // The database of the master; the plugin never opens it
+        exclude(dependency('com.zaxxer:.*'))
+        exclude(dependency('com.mysql:.*'))
+        exclude(dependency('com.google.protobuf:.*'))
+    }
+    // JLine's native terminal (Java 22+) is only used by the master/wrapper console, never inside a server
+    exclude('org/jline/terminal/impl/ffm/**')
+    // Servers bring their own, often much older, Gson and Netty (Paper 1.8: Gson 2.2.4, Netty 4.0) and load them
+    // before the plugin's; relocated copies cannot clash. Adventure stays, plugins pass its types to the API.
+    relocate 'com.google.gson', 'de.rexlcloud.bridge.libs.gson'
+    relocate 'io.netty', 'de.rexlcloud.bridge.libs.netty'
+    archiveClassifier = ''
+}
+
+publishing {
+    repositories {
+        maven {
+            name = "api"
+            url = "https://repo.rexlcloud.de/releases"
+            credentials {
+                username = (System.getenv("REPO_USERNAME") ?: findProperty("rexlcloudUsername"))
+                password = (System.getenv("REPO_PASSWORD") ?: findProperty("rexlcloudPassword"))
+            }
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+    }
+
+    publications {
+        api(MavenPublication) { publication ->
+            groupId = 'de.rexlcloud'
+            artifactId = 'bukkit-api'
+            version = version
+
+            from components.shadow
+        }
+    }
+}
+
+test {
+    useJUnitPlatform()
+}

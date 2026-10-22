@@ -1,0 +1,29 @@
+plugins {
+    id 'java'
+}
+
+group = 'de.rexlcloud'
+
+repositories {
+}
+
+dependencies {
+    implementation project(":Core")
+    // Transport, buffers, framing and TLS; netty-all would add every protocol and native library
+    implementation 'io.netty:netty-handler:4.2.19.Final'
+    // Backend for the libraries that log through SLF4J (HikariCP, Netty); only warnings and errors are shown
+    implementation 'org.slf4j:slf4j-simple:2.0.18'
+    implementation 'commons-io:commons-io:2.22.0'
+    implementation 'org.yaml:snakeyaml:2.7'
+}
+
+shadowJar {
+    manifest.attributes["Main-Class"] = "de.rexlcloud.wrapper.RexlCloudWrapper"
+    // JLine uses native terminal access for the console; without this Java warns on every start
+    manifest.attributes["Enable-Native-Access"] = "ALL-UNNAMED"
+    archiveClassifier = ''
+}
+
+test {
+    useJUnitPlatform()
+}

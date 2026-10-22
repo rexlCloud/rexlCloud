@@ -1,0 +1,12 @@
+# Text files are stored and checked out with LF, so run.sh works on Linux and Git stops warning about CRLF
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.jar binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.gz binary

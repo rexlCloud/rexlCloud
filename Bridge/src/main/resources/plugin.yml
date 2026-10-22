@@ -1,0 +1,7 @@
+main: de.rexlcloud.bridge.Bridge
+author: rexlNico
+version: 1.0.0
+description: rexlCloud Bridge Plugin
+name: rexlCloudBridge
+api-version: 1.13
+prefix: rexlCloud

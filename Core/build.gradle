@@ -1,0 +1,107 @@
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group = 'de.rexlcloud'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    //Console
+    implementation 'org.jline:jline:4.4.8'
+
+    //Database
+    implementation 'com.zaxxer:HikariCP:7.1.0'
+    implementation 'com.mysql:mysql-connector-j:26.7.0'
+
+    // Transport, buffers, framing and TLS; netty-all would add every protocol and native library
+    implementation 'io.netty:netty-handler:4.2.19.Final'
+
+    //Messages
+    implementation "net.kyori:adventure-text-minimessage:5.2.0"
+    implementation "net.kyori:adventure-text-serializer-gson:5.2.0"
+
+    // In-memory database for the database tests
+    testImplementation 'com.h2database:h2:2.5.252'
+}
+
+/**
+ * What the API's signatures use; consumers need these to compile. Keep the versions in line with the dependencies
+ * above and the root build.
+ */
+def moduleApiDependencies = [
+        'com.google.code.gson:gson:2.14.0',
+        'net.kyori:adventure-text-minimessage:5.2.0',
+]
+
+def moduleApiJar = tasks.register('moduleApiJar', Jar) {
+    description = 'The module-api jar: the classes of Core without bundled libraries'
+    archiveBaseName = 'module-api'
+    archiveClassifier = ''
+    from sourceSets.main.output
+}
+
+def moduleApiSourcesJar = tasks.register('moduleApiSourcesJar', Jar) {
+    archiveBaseName = 'module-api'
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+publishing {
+    repositories {
+        maven {
+            name = "api"
+            url = "https://repo.rexlcloud.de/releases"
+            credentials {
+                username = (System.getenv("REPO_USERNAME") ?: findProperty("rexlcloudUsername"))
+                password = (System.getenv("REPO_PASSWORD") ?: findProperty("rexlcloudPassword"))
+            }
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+    }
+
+    publications {
+        // A normal jar with the cloud's own classes and a POM that lists what modules compile against, so Gradle
+        // (compileOnly) and Maven (provided) both get the API and its types (Gson for the ModuleApi, Adventure for
+        // chat components). The rest of Core's dependencies (database, console, network) only run inside the master,
+        // which brings them, so they are not listed.
+        api(MavenPublication) { publication ->
+            groupId = 'de.rexlcloud'
+            artifactId = 'module-api'
+            version = version
+
+            artifact moduleApiJar
+            artifact moduleApiSourcesJar
+            pom {
+                name = 'rexlCloud Module API'
+                description = 'API for rexlCloud modules, and the API shared by the cloud plugins'
+                url = 'https://rexlcloud.de'
+                withXml {
+                    def dependencies = asNode().appendNode('dependencies')
+                    moduleApiDependencies.each { coordinates ->
+                        def (group, artifact, dependencyVersion) = coordinates.split(':')
+                        def dependency = dependencies.appendNode('dependency')
+                        dependency.appendNode('groupId', group)
+                        dependency.appendNode('artifactId', artifact)
+                        dependency.appendNode('version', dependencyVersion)
+                        dependency.appendNode('scope', 'compile')
+                    }
+                }
+            }
+        }
+    }
+}
+
+shadowJar {
+    relocate("com.zaxxer:HikariCP", "de.rexlcloud:HikariCP")
+    //archiveClassifier = null
+}
+
+test {
+    useJUnitPlatform()
+}

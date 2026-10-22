@@ -1,0 +1,80 @@
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group = 'de.rexlcloud'
+
+repositories {
+    mavenCentral()
+}
+
+// A library for Minestom servers ("Custom jar" groups): the server adds it as a dependency and calls
+// RexlCloudBridge.getInstance().initialize(). Its version has to match the cloud's.
+dependencies {
+    implementation project(":Core")
+    compileOnly 'net.minestom:minestom:2026.10.07-26.2'
+    // Transport, buffers, framing and TLS; netty-all would add every protocol and native library
+    implementation 'io.netty:netty-handler:4.2.19.Final'
+
+    testImplementation 'net.minestom:minestom:2026.10.07-26.2'
+}
+
+shadowJar {
+    archiveClassifier = ''
+    // Minestom brings Adventure, Gson and SLF4J in the same versions; MiniMessage it does not
+    dependencies {
+        exclude(dependency('net.kyori:adventure-api'))
+        exclude(dependency('net.kyori:adventure-key'))
+        exclude(dependency('net.kyori:adventure-nbt'))
+        exclude(dependency('net.kyori:adventure-text-serializer-gson'))
+        exclude(dependency('net.kyori:adventure-text-serializer-json'))
+        exclude(dependency('net.kyori:adventure-text-serializer-commons'))
+        exclude(dependency('net.kyori:examination-api'))
+        exclude(dependency('net.kyori:examination-string'))
+        exclude(dependency('net.kyori:option'))
+        exclude(dependency('com.google.code.gson:gson'))
+        exclude(dependency('org.slf4j:.*'))
+        // The database of the master; the plugin never opens it
+        exclude(dependency('com.zaxxer:.*'))
+        exclude(dependency('com.mysql:.*'))
+        exclude(dependency('com.google.protobuf:.*'))
+    }
+    // The console classes stay: the network code logs errors through them (JLine's native terminal is not needed)
+    exclude('org/jline/terminal/impl/ffm/**')
+    exclude('de/rexlcloud/core/command/**')
+    exclude('de/rexlcloud/core/database/**')
+    exclude('de/rexlcloud/core/api/module/**')
+    // The server may use Netty itself, in another version
+    relocate 'io.netty', 'de.rexlcloud.bridge.libs.netty'
+}
+
+publishing {
+    repositories {
+        maven {
+            name = "api"
+            url = "https://repo.rexlcloud.de/releases"
+            credentials {
+                username = (System.getenv("REPO_USERNAME") ?: findProperty("rexlcloudUsername"))
+                password = (System.getenv("REPO_PASSWORD") ?: findProperty("rexlcloudPassword"))
+            }
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+    }
+
+    publications {
+        api(MavenPublication) { publication ->
+            groupId = 'de.rexlcloud'
+            artifactId = 'minestom-api'
+            version = version
+
+            from components.shadow
+        }
+    }
+}
+
+test {
+    useJUnitPlatform()
+}

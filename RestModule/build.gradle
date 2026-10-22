@@ -1,0 +1,45 @@
+plugins {
+    id 'java'
+}
+
+group = 'de.rexlcloud'
+
+repositories {
+}
+
+dependencies {
+    compileOnly project(":Core")
+    implementation 'io.javalin:javalin:7.2.3'
+    implementation 'org.slf4j:slf4j-simple:2.0.18'
+
+    testImplementation project(":Core")
+    testImplementation 'org.bouncycastle:bcpkix-jdk18on:1.86'
+}
+
+processResources {
+    inputs.property 'version', version
+    filesMatching('module.json') {
+        expand(version: version)
+    }
+}
+
+shadowJar {
+    archiveClassifier = ''
+}
+
+test {
+    useJUnitPlatform()
+}
+
+// Starts the RestModule with an in-memory fake cloud for developing the web panel:
+// ./gradlew :RestModule:runDevServer
+tasks.register('runDevServer', JavaExec) {
+    group = 'application'
+    description = 'Runs the REST API on port 4343 against fake cloud data'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'de.rexlcloud.restmodule.DevServer'
+    workingDir = layout.buildDirectory.dir('dev-server').get().asFile
+    doFirst { workingDir.mkdirs() }
+}
+
+// The master updates an installed RestModule to its own version from here

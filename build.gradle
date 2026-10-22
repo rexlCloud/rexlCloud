@@ -1,0 +1,166 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.6.1'
+}
+
+group = 'de.rexlcloud'
+version = '1.0.0'
+
+subprojects {
+
+    apply plugin: 'java-library'
+    apply plugin: 'com.gradleup.shadow'
+    version = '1.0.0'
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        //Annotation
+        compileOnly 'org.projectlombok:lombok:1.18.48'
+        annotationProcessor 'org.projectlombok:lombok:1.18.48'
+        compileOnly 'org.jetbrains:annotations:26.1.0'
+        testCompileOnly 'org.projectlombok:lombok:1.18.48'
+        testAnnotationProcessor 'org.projectlombok:lombok:1.18.48'
+        testCompileOnly 'org.jetbrains:annotations:26.1.0'
+
+        implementation 'com.google.code.gson:gson:2.14.0'
+
+        testImplementation platform('org.junit:junit-bom:6.1.3')
+        testImplementation 'org.junit.jupiter:junit-jupiter-api'
+        testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+    }
+
+    // Core is shaded into the Bridge, which runs inside Minecraft servers that may use an older Java than the cloud
+    def pluginRelease = (findProperty('pluginJavaRelease') ?: '21') as int
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.release = (project.name in ['Core', 'Bridge'] && name == 'compileJava') ? pluginRelease : 25
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+
+    test.onlyIf { System.getenv("SKIP_TESTS") == null }
+
+    tasks.build.dependsOn tasks.shadowJar
+    // Other modules depend on the plain jar, so it has to be built; the classifier keeps it apart from the shadow jar
+    jar {
+        archiveClassifier = 'plain'
+    }
+}
+
+// Javadoc of the APIs plugins and modules are written against. Lombok generates the getters at compile time, so the
+// docs are built from delomboked sources; only the API classes are documented, not the internals.
+//   ./gradlew apiDocs   ->  build/api-docs/<artifact>/index.html
+repositories {
+    mavenCentral()
+}
+configurations {
+    lombokTool
+}
+dependencies {
+    lombokTool 'org.projectlombok:lombok:1.18.48'
+}
+
+// The cloud API every plugin sees, without the module API and the cloud's events (those exist on the master only)
+def pluginApi = ['de/rexlcloud/core/api/*.java', 'de/rexlcloud/core/api/exceptions/**',
+                 'de/rexlcloud/core/server/ServerGroup.java', 'de/rexlcloud/core/server/ServerType.java']
+def apiDocs = [
+        Core          : [artifact: 'module-api', title: 'rexlCloud Module API',
+                         include : ['de/rexlcloud/core/api/**', 'de/rexlcloud/core/server/ServerGroup.java',
+                                    'de/rexlcloud/core/server/ServerType.java', 'de/rexlcloud/core/console/Console.java',
+                                    'de/rexlcloud/core/console/animation/**',
+                                    'de/rexlcloud/core/command/CommandManager.java', 'de/rexlcloud/core/command/CommandMethod.java',
+                                    'de/rexlcloud/core/command/CommandMethode.java', 'de/rexlcloud/core/command/Argument.java',
+                                    'de/rexlcloud/core/command/CommandDescription.java', 'de/rexlcloud/core/command/Suggestion.java',
+                                    'de/rexlcloud/core/command/CommandPreProcessor.java', 'de/rexlcloud/core/command/ObjectParser.java'],
+                         exclude : ['de/rexlcloud/core/api/module/ModuleClassLoader.java', 'de/rexlcloud/core/api/SafeObjectInput.java',
+                                    'de/rexlcloud/core/api/events/EventRegistry.java']],
+        Bridge        : [artifact: 'bukkit-api', title: 'rexlCloud Bridge API (Paper/Spigot)',
+                         include : pluginApi + ['de/rexlcloud/bridge/Bridge.java', 'de/rexlcloud/bridge/helper/**']],
+        Proxy         : [artifact: 'proxy-api', title: 'rexlCloud Proxy API (Velocity/BungeeCord)',
+                         include : pluginApi + ['de/rexlcloud/proxy/velocity/VelocityProxy.java', 'de/rexlcloud/proxy/bungee/BungeeProxy.java',
+                                                'de/rexlcloud/proxy/bungee/BungeeText.java', 'de/rexlcloud/proxy/common/config/PluginMessages.java']],
+        MinestomBridge: [artifact: 'minestom-api', title: 'rexlCloud Minestom API',
+                         include : pluginApi + ['de/rexlcloud/bridge/RexlCloudBridge.java', 'de/rexlcloud/bridge/helper/**']],
+]
+def pluginApiExclude = ['de/rexlcloud/core/api/SafeObjectInput.java']
+
+subprojects { sub ->
+    sub.tasks.register('delombok', JavaExec) {
+        description = 'Writes the sources with the code Lombok generates, for the Javadoc'
+        def out = sub.layout.buildDirectory.dir('delombok')
+        inputs.files(sub.sourceSets.main.java)
+        outputs.dir(out)
+        classpath = rootProject.configurations.lombokTool
+        mainClass = 'lombok.launch.Main'
+        // Lombok still reads fields through sun.misc.Unsafe
+        jvmArgs '--sun-misc-unsafe-memory-access=allow'
+        doFirst {
+            args = ['delombok', '-q', '-e', 'UTF-8', sub.file('src/main/java').path, '-d', out.get().asFile.path,
+                    '--classpath', sub.sourceSets.main.compileClasspath.asPath]
+        }
+    }
+}
+
+apiDocs.each { name, api ->
+    project(":$name") { sub ->
+        def docs = sub.tasks.register('apiJavadoc', Javadoc) {
+            description = "Javadoc of ${api.artifact}"
+            dependsOn ':Core:delombok', sub.tasks.named('delombok'), ':Core:jar', sub.tasks.named('jar')
+            title = "${api.title} ${version}"
+            destinationDir = sub.layout.buildDirectory.dir('docs/api').get().asFile
+            source = files(project(':Core').layout.buildDirectory.dir('delombok'), sub.layout.buildDirectory.dir('delombok')).asFileTree
+            include api.include
+            exclude(api.exclude ?: pluginApiExclude)
+            classpath = sub.sourceSets.main.compileClasspath + project(':Core').sourceSets.main.compileClasspath +
+                    files(project(':Core').tasks.named('jar'), sub.tasks.named('jar'))
+            options.encoding = 'UTF-8'
+            options.docEncoding = 'UTF-8'
+            options.windowTitle = "${api.title} ${version}"
+            options.links('https://docs.oracle.com/en/java/javase/25/docs/api/')
+            // Missing comments of internal members are not errors
+            options.addStringOption('Xdoclint:all,-missing', '-quiet')
+        }
+        def jar = sub.tasks.register('apiJavadocJar', Jar) {
+            archiveClassifier = 'javadoc'
+            from docs
+        }
+        sub.plugins.withId('maven-publish') {
+            sub.publishing.publications.matching { it.name == 'api' }.configureEach {
+                artifact jar
+            }
+        }
+    }
+}
+
+tasks.register('apiDocs', Sync) {
+    description = 'Javadoc of all APIs in build/api-docs'
+    apiDocs.each { name, api ->
+        dependsOn ":$name:apiJavadoc"
+        from(project(":$name").layout.buildDirectory.dir('docs/api')) { into api.artifact }
+    }
+    into layout.buildDirectory.dir('api-docs')
+    doLast {
+        def links = apiDocs.values().collect { "<li><a href=\"${it.artifact}/index.html\">${it.title}</a> (${it.artifact})</li>" }.join('\n')
+        file("${destinationDir}/index.html").text = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>rexlCloud API ${version}</title></head>
+<body style="font-family: sans-serif; max-width: 40rem; margin: 3rem auto">
+<h1>rexlCloud API ${version}</h1>
+<ul>
+${links}
+</ul>
+</body></html>
+"""
+    }
+}

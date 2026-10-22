@@ -1,0 +1,33 @@
+plugins {
+    id 'java'
+}
+
+group = 'de.rexlcloud'
+
+repositories {
+}
+
+dependencies {
+    implementation project(":Core")
+    // Transport, buffers, framing and TLS; netty-all would add every protocol and native library
+    implementation 'io.netty:netty-handler:4.2.19.Final'
+    // Backend for the libraries that log through SLF4J (HikariCP, Netty); only warnings and errors are shown
+    implementation 'org.slf4j:slf4j-simple:2.0.18'
+    // Embedded database for installs without MySQL ("type": "h2" in config/database.json)
+    implementation 'com.h2database:h2:2.5.252'
+    // Creates the master's TLS certificate
+    implementation 'org.bouncycastle:bcpkix-jdk18on:1.86'
+}
+
+shadowJar {
+    manifest.attributes["Main-Class"] = "de.rexlcloud.master.RexlCloudMaster"
+    // JLine uses native terminal access for the console; without this Java warns on every start
+    manifest.attributes["Enable-Native-Access"] = "ALL-UNNAMED"
+    archiveClassifier = ''
+    // Signatures of signed dependencies (BouncyCastle) do not match the merged jar and would stop it from loading
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/*.EC'
+}
+
+test {
+    useJUnitPlatform()
+}

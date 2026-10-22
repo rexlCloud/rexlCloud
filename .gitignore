@@ -1,0 +1,23 @@
+/templates/tt/plugins/
+/servers/template/tt/proxy.jar
+/templates/tt/proxy.jar
+/servers/template/
+/Wrapper/build
+/Wrapper/bin
+/Master/build
+/Master/bin
+*.jar
+*.class
+/Bridge/bin/
+**/bin/main/**
+/Core/database.json
+
+.gradle/
+*/build/
+/build/
+
+**/build/
+
+# IDE settings
+.idea/
+*.iml

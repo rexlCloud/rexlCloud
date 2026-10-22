@@ -1,0 +1,5 @@
+name: rexlCLoudProxy
+description: Proxy für rexlCloud
+version: 1.0.0
+main: de.rexlcloud.proxy.bungee.BungeeProxy
+author: rexlNico

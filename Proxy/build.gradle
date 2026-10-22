@@ -1,0 +1,82 @@
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group = 'de.rexlcloud'
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'papermc'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+}
+
+dependencies {
+    implementation project(":Core")
+
+    compileOnly 'com.velocitypowered:velocity-api:4.2.0'
+    annotationProcessor 'com.velocitypowered:velocity-api:4.2.0'
+
+    //CommandManager
+    implementation 'org.incendo:cloud-bungee:2.0.1'
+    implementation 'org.incendo:cloud-velocity:2.0.1'
+    implementation 'org.incendo:cloud-annotations:2.1.0'
+    implementation 'org.incendo:cloud-core:2.1.0'
+    implementation 'org.incendo:cloud-minecraft-extras:2.0.1'
+
+    compileOnly 'net.md-5:bungeecord-api:1.21-R0.4'
+
+    // Transport, buffers, framing and TLS; netty-all would add every protocol and native library
+    implementation 'io.netty:netty-handler:4.2.19.Final'
+
+    implementation "net.kyori:adventure-text-minimessage:5.2.0"
+    implementation "net.kyori:adventure-text-serializer-gson:5.2.0"
+
+}
+
+shadowJar {
+    exclude('org/jline/terminal/impl/ffm/**')
+    dependencies {
+        // The database of the master; the plugin never opens it
+        exclude(dependency('com.zaxxer:.*'))
+        exclude(dependency('com.mysql:.*'))
+        exclude(dependency('com.google.protobuf:.*'))
+    }
+    exclude("de.rexlcloud.core.api.events")
+    exclude("de.rexlcloud.core.api.module")
+    exclude("de.rexlcloud.core.console")
+    exclude("de.rexlcloud.core.server")
+    archiveClassifier = ''
+}
+
+publishing {
+    repositories {
+        maven {
+            name = "api"
+            url = "https://repo.rexlcloud.de/releases"
+            credentials {
+                username = (System.getenv("REPO_USERNAME") ?: findProperty("rexlcloudUsername"))
+                password = (System.getenv("REPO_PASSWORD") ?: findProperty("rexlcloudPassword"))
+            }
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+    }
+
+    publications {
+        api(MavenPublication) { publication ->
+            groupId = 'de.rexlcloud'
+            artifactId = 'proxy-api'
+            version = version
+
+            from components.shadow
+        }
+    }
+}
+
+test {
+    useJUnitPlatform()
+}

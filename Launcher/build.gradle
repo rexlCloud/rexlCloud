@@ -1,0 +1,26 @@
+plugins {
+    id 'java'
+}
+
+group = 'de.rexlcloud'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'commons-io:commons-io:2.22.0'
+}
+
+shadowJar {
+    manifest.attributes["Main-Class"] = "de.rexlcloud.launcher.Launcher"
+    // JLine uses native terminal access for the console; without this Java warns on every start
+    manifest.attributes["Enable-Native-Access"] = "ALL-UNNAMED"
+    // Compared with the newest release when the launcher updates itself
+    manifest.attributes["Implementation-Version"] = version
+    archiveClassifier = ''
+}
+
+test {
+    useJUnitPlatform()
+}

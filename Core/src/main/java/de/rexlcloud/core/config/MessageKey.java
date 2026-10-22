@@ -1,0 +1,46 @@
+package de.rexlcloud.core.config;
+
+import lombok.AllArgsConstructor;
+
+@AllArgsConstructor
+public enum MessageKey {
+
+    GROUP_LIST_MESSAGE,
+    GROUP_INFO_MESSAGE,
+    GROUP_LOAD_FAILED_MESSAGE,
+    GROUP_NOT_FOUND_MESSAGE,
+    PLAYER_LIST_MESSAGE,
+    NO_PLAYERS_ONLINE_MESSAGE,
+    PLAYER_LOAD_FAILED_MESSAGE,
+
+    START_SERVER_MESSAGE,
+    ERROR_WILE_STARTING_SERVER_MESSAGE,
+    ERROR_WILE_STOPPING_SERVER_MESSAGE,
+    STOP_SERVER_MESSAGE,
+    SERVER_NOT_FOUND_MESSAGE,
+    SERVER_EXECUTE_COMMAND_MESSAGE,
+    ERROR_WILE_SERVER_EXECUTING_COMMAND_MESSAGE,
+    SERVER_LIST_MESSAGE,
+    ERROR_WILE_LOADING_SERVER_MESSAGE,
+    WRAPPER_LIST_MESSAGE,
+    NO_WRAPPER_FOUND_MESSAGE,
+    ERROR_WILE_LOADING_WRAPPER_MESSAGE,
+    WRAPPER_INFO_MESSAGE,
+    STOP_WRAPPER_MESSAGE,
+    PLAYER_NOT_FOUND,
+    PLAYER_INFO_MESSAGE,
+    PLAYER_NOTIFY_SERVER_ONLINE,
+    PLAYER_NOTIFY_SERVER_OFFLINE,
+    KICK_SERVER_MAINTENANCE,
+    KICK_NO_SERVER_FOUND,
+    /**
+     * Shown in the server list of the proxies, two lines separated by {@code <newline>}.
+     */
+    MOTD,
+    /**
+     * Shown in the server list instead of {@link #MOTD} while maintenance mode is on.
+     */
+    MAINTENANCE_MOTD,
+
+
+}

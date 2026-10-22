@@ -16,9 +16,10 @@ import java.util.HexFormat;
 import java.util.Locale;
 
 /**
- * The jars of every rexlCloud version, attached to its GitHub release: {@code launcher.jar}, {@code master.jar},
- * {@code wrapper.jar}, {@code bridge.jar}, {@code proxy.jar}, {@code restmodule.jar}, each with a
- * {@code <name>.jar.sha256} that is checked after the download.
+ * The jars of every rexlCloud version, attached to its GitHub release with the version in their name:
+ * {@code launcher-<version>.jar}, {@code master-<version>.jar}, {@code wrapper-<version>.jar},
+ * {@code bridge-<version>.jar}, {@code proxy-<version>.jar}, {@code restmodule-<version>.jar}, each with a
+ * {@code .sha256} that is checked after the download.
  * <p>
  * The releases are read from {@value #DEFAULT_RELEASES}; the system property {@code rexlcloud.releases} points to
  * another repository's releases (e.g. a fork).
@@ -50,14 +51,14 @@ public final class CloudReleases {
 
     /**
      * @param name e.g. {@code bridge}
-     * @return the URL of {@code <name>.jar} of that version
+     * @return the URL of {@code <name>-<version>.jar} in the release of that version
      */
     public String jarUrl(String version, String name) {
-        return releases + "/download/v" + version + "/" + name + ".jar";
+        return releases + "/download/v" + version + "/" + name + "-" + version + ".jar";
     }
 
     /**
-     * Downloads {@code <name>.jar} of a version to {@code target}, checking its SHA-256. The file appears in one
+     * Downloads {@code <name>-<version>.jar} to {@code target}, checking its SHA-256. The file appears in one
      * step and only if it is complete; a failed download leaves {@code target} as it was.
      *
      * @throws IOException if the release has no such jar, the download fails or the checksum does not match

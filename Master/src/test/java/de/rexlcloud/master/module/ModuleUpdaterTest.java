@@ -62,11 +62,11 @@ class ModuleUpdaterTest {
     }
 
     /**
-     * Attaches {@code <artifact>.jar} and its checksum to the release {@code v<version>}, like the release workflow.
+     * Attaches {@code <artifact>-<version>.jar} and its checksum to the release {@code v<version>}, like the release workflow.
      */
     private void publish(String artifact, String name, String version) throws IOException {
         var jar = moduleJar(name, version);
-        var path = "download/v" + version + "/" + artifact + ".jar";
+        var path = "download/v" + version + "/" + artifact + "-" + version + ".jar";
         files.put(path, jar);
         var temp = Files.write(modules.resolveSibling("sha-" + version), jar);
         files.put(path + ".sha256", (CloudReleases.sha256(temp) + "  " + artifact + ".jar\n").getBytes(StandardCharsets.UTF_8));
@@ -121,7 +121,7 @@ class ModuleUpdaterTest {
         assertEquals("1.0.12", installedVersion("RestModule-1.0.12.jar"));
 
         publish("restmodule", "RestModule", "1.0.14");
-        files.put("download/v1.0.14/restmodule.jar.sha256", "0".repeat(64).getBytes(StandardCharsets.UTF_8));
+        files.put("download/v1.0.14/restmodule-1.0.14.jar.sha256", "0".repeat(64).getBytes(StandardCharsets.UTF_8));
         new ModuleUpdater(modules, releases).update("1.0.14");
         assertEquals("1.0.12", installedVersion("RestModule-1.0.12.jar"));
         try (var files = Files.list(modules)) {

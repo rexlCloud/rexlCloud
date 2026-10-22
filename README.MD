@@ -18,15 +18,16 @@ Here are some of the most important features of rexlCloud:
 ## Download
 
 Every version is a [GitHub release](https://github.com/rexlCloud/rexlCloud/releases) with the jars
-`launcher.jar`, `master.jar`, `wrapper.jar`, `bridge.jar`, `proxy.jar` and `restmodule.jar`, each with a
-`.sha256` checksum. You only need the launcher:
+`launcher-<version>.jar`, `master-<version>.jar`, `wrapper-<version>.jar`, `bridge-<version>.jar`,
+`proxy-<version>.jar` and `restmodule-<version>.jar`, each with a `.sha256` checksum. You only need the launcher of
+the [newest release](https://github.com/rexlCloud/rexlCloud/releases/latest), e.g.:
 
 ```bash
-curl -L -o launcher.jar https://github.com/rexlCloud/rexlCloud/releases/latest/download/launcher.jar
+curl -L -o launcher.jar https://github.com/rexlCloud/rexlCloud/releases/download/v1.0.1/launcher-1.0.1.jar
 ```
 
-The launcher downloads the master and wrapper from the newest release, the wrapper the cloud plugins (`bridge.jar`,
-`proxy.jar`) of its own version, and the master installed official modules such as the RestModule. Every download
+The launcher downloads the master and wrapper from the newest release, the wrapper the cloud plugins
+(`bridge-<version>.jar`, `proxy-<version>.jar`) of its own version, and the master installed official modules such as the RestModule. Every download
 is checked against its checksum. The system property `rexlcloud.releases` (e.g.
 `-Drexlcloud.releases=https://github.com/you/rexlCloud/releases`) points them to the releases of another repository,
 e.g. a fork.

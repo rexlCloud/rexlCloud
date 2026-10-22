@@ -1,8 +1,9 @@
 name: Build and release
 
 # Every push to main is built and tested (unit and end-to-end tests). When the version in build.gradle has no
-# GitHub release yet, a release v<version> is created with the jars the cloud downloads (launcher, master, wrapper,
-# bridge, proxy, restmodule, each with a .sha256), and the developer APIs are published to Reposilite
+# GitHub release yet, a release v<version> is created with the jars the cloud downloads (launcher-<version>.jar,
+# master-, wrapper-, bridge-, proxy-, restmodule-<version>.jar, each with a .sha256), and the developer APIs are
+# published to Reposilite
 # (repo.rexlcloud.de/releases). Pull requests are only built and tested.
 on:
   push:
@@ -89,8 +90,7 @@ jobs:
           REPO_USERNAME: ${{ secrets.REPO_USERNAME }}
           REPO_PASSWORD: ${{ secrets.REPO_PASSWORD }}
 
-      # The launcher, wrappers and master download from here: releases/latest/download/<name>.jar for the newest
-      # version, releases/download/v<version>/<name>.jar for a given one. The names stay the same in every release.
+      # The launcher, wrappers and master download from here: releases/download/v<version>/<name>-<version>.jar.
       - name: Create the GitHub release
         if: github.event_name != 'pull_request' && steps.version.outputs.released == 'false'
         run: |
@@ -98,14 +98,14 @@ jobs:
           mkdir release
           for project in Launcher Master Wrapper Bridge Proxy RestModule; do
             name=$(echo "$project" | tr '[:upper:]' '[:lower:]')
-            cp "$project/build/libs/$project-$version.jar" "release/$name.jar"
-            (cd release && sha256sum "$name.jar" > "$name.jar.sha256")
+            cp "$project/build/libs/$project-$version.jar" "release/$name-$version.jar"
+            (cd release && sha256sum "$name-$version.jar" > "$name-$version.jar.sha256")
           done
           cat > release-notes.md <<EOF
           Start with the launcher, it downloads everything else:
 
           \`\`\`bash
-          curl -L -o launcher.jar https://github.com/${{ github.repository }}/releases/download/v$version/launcher.jar
+          curl -L -o launcher.jar https://github.com/${{ github.repository }}/releases/download/v$version/launcher-$version.jar
           java -jar launcher.jar --master
           \`\`\`
 

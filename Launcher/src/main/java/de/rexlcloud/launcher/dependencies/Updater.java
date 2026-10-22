@@ -21,7 +21,8 @@ import java.util.Map;
 
 /**
  * Downloads the master or wrapper jar from the cloud's GitHub releases and keeps it up to date. Every release has
- * {@code master.jar}, {@code wrapper.jar} and {@code launcher.jar}, each with a {@code .sha256} that is checked.
+ * {@code master-<version>.jar}, {@code wrapper-<version>.jar} and {@code launcher-<version>.jar}, each with a
+ * {@code .sha256} that is checked.
  * <p>
  * {@code launcher.cnf} holds {@code auto_update} and the installed {@code master_version}/{@code wrapper_version}.
  * With auto_update the newest version is installed on every start; without it the version in the file is used.
@@ -148,7 +149,7 @@ public class Updater {
     }
 
     private String getDownloadUrl(String version, String type) {
-        return releases + "/download/v" + version + "/" + type + ".jar";
+        return releases + "/download/v" + version + "/" + type + "-" + version + ".jar";
     }
 
     private Path jar(String type) {

@@ -5,15 +5,15 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * A module that ships with the cloud: attached to every GitHub release as {@code <artifact>.jar}, offered by the
- * first-start setup and by {@code modules install}, and kept at the master's version by {@link ModuleUpdater} once
- * installed.
+ * A module that ships with the cloud: attached to every GitHub release as {@code <artifact>-<version>.jar},
+ * offered by the first-start setup and by {@code modules install}, and kept at the master's version by
+ * {@link ModuleUpdater} once installed.
  * <p>
  * To ship a new optional module, add its jar to the release assets in {@code .github/workflows/release.yml} (like
  * the RestModule) and add it to {@link #ALL}.
  *
  * @param name               name in the module's module.json
- * @param artifact           name of its jar in the GitHub releases, without {@code .jar}
+ * @param artifact           name of its jar in the GitHub releases, without {@code -<version>.jar}
  * @param description        one line for the setup and {@code modules available}
  * @param installedByDefault the answer the setup suggests
  */

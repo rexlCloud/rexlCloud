@@ -413,7 +413,7 @@ public class Server extends AbstractServer {
         var cached = Path.of("cache", "plugins", fileName);
         try {
             if (!Files.isRegularFile(cached)) {
-                // bridge.jar or proxy.jar of the cloud's GitHub release, checked against its SHA-256
+                // bridge-<version>.jar or proxy-<version>.jar of the cloud's GitHub release, checked against its SHA-256
                 CloudReleases.official().download(version, type, cached);
             }
             Files.copy(cached, new File(pluginsFolder, fileName).toPath(), StandardCopyOption.REPLACE_EXISTING);

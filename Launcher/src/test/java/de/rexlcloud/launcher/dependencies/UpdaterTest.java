@@ -27,7 +27,7 @@ class UpdaterTest {
      */
     private String repository;
     /**
-     * Served files by path below the releases page, e.g. download/v1.0.5/master.jar.
+     * Served files by path below the releases page, e.g. download/v1.0.5/master-1.0.5.jar.
      */
     private final Map<String, byte[]> files = new HashMap<>();
     /**
@@ -66,12 +66,12 @@ class UpdaterTest {
     }
 
     /**
-     * Makes {@code version} the newest release with {@code <type>.jar} and its checksum.
+     * Makes {@code version} the newest release with {@code <type>-<version>.jar} and its checksum.
      */
     private void publish(String type, String version, String jarContent) throws IOException {
         latest = version;
         var jar = jarContent.getBytes(StandardCharsets.UTF_8);
-        var path = "download/v" + version + "/" + type + ".jar";
+        var path = "download/v" + version + "/" + type + "-" + version + ".jar";
         files.put(path, jar);
         var temp = Files.write(folder.resolve("sha-source"), jar);
         // As sha256sum writes it
@@ -135,7 +135,7 @@ class UpdaterTest {
         publish("master", "1.0.4", "master 1.0.4");
         new Updater(folder, repository).download("master");
         publish("master", "1.0.5", "master 1.0.5");
-        files.put("download/v1.0.5/master.jar", "truncated".getBytes(StandardCharsets.UTF_8));
+        files.put("download/v1.0.5/master-1.0.5.jar", "truncated".getBytes(StandardCharsets.UTF_8));
 
         var failure = assertThrows(IOException.class, () -> new Updater(folder, repository).download("master"));
 
@@ -205,7 +205,7 @@ class UpdaterTest {
     @Test
     void aDamagedLauncherDownloadIsNotInstalled() throws IOException {
         publish("launcher", "1.0.20", "launcher 1.0.20");
-        files.put("download/v1.0.20/launcher.jar.sha256", "0".repeat(64).getBytes(StandardCharsets.UTF_8));
+        files.put("download/v1.0.20/launcher-1.0.20.jar.sha256", "0".repeat(64).getBytes(StandardCharsets.UTF_8));
         var own = Files.writeString(folder.resolve("launcher.jar"), "launcher 1.0.19");
 
         assertNull(new Updater(folder, repository).updateLauncher(own, "1.0.19"));

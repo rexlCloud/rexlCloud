@@ -1,6 +1,7 @@
 package de.rexlcloud.core.api.module;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import lombok.NonNull;
 import org.jetbrains.annotations.Nullable;
@@ -208,6 +209,38 @@ public interface ModuleApi {
      * Sends a chat message (MiniMessage) to a player.
      */
     ModuleApiResult messagePlayer(@NonNull UUID uuid, @NonNull String message);
+
+    /**
+     * A player who joined the network at least once, online or not, with the data plugins stored for them.
+     *
+     * @param player UUID or name (case-insensitive) of the player
+     * @return data: {@code uuid}, {@code name}, {@code first_login}, {@code last_login}, {@code online} (with
+     *         {@code server}, {@code server_group}, {@code proxy} and {@code login} while online) and {@code data}:
+     *         the stored values, see {@link de.rexlcloud.core.api.PlayerDataValues#describe}; not found if the
+     *         player never joined
+     */
+    ModuleApiResult getPlayer(@NonNull String player);
+
+    /**
+     * Stores a value for a player, whether they are online or not, as plugins do with {@code setData}.
+     *
+     * @param player UUID or name of a player who joined at least once
+     * @param key    name of the value
+     * @param type   one of {@link de.rexlcloud.core.api.PlayerDataValues#WRITABLE_TYPES}; {@code null} keeps the
+     *               type of the current value, or picks one from the JSON value for a new key
+     * @param value  a JSON string, number or boolean
+     * @return data: the stored value, as in {@link #getPlayer(String)}
+     */
+    ModuleApiResult setPlayerData(@NonNull String player, @NonNull String key, @Nullable String type,
+                                  @NonNull JsonElement value);
+
+    /**
+     * Removes a value stored for a player.
+     *
+     * @param player UUID or name of a player who joined at least once
+     * @return not found if the player never joined or has no value under this key
+     */
+    ModuleApiResult removePlayerData(@NonNull String player, @NonNull String key);
 
     // Wrappers
 

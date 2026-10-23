@@ -1,13 +1,22 @@
 package de.rexlcloud.restmodule;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+import de.rexlcloud.core.api.PlayerDataValues;
+import de.rexlcloud.core.api.PlayerDatabaseData;
 import de.rexlcloud.core.api.module.ModuleApi;
 import de.rexlcloud.core.api.module.ModuleApiResult;
 import de.rexlcloud.core.console.LogList;
 import lombok.NonNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,6 +40,10 @@ public class FakeModuleApi implements ModuleApi {
     final List<String> moduleFiles = new CopyOnWriteArrayList<>(List.of("RestModule.jar", "SignModule.jar", "StatsModule.jar"));
     final List<String> killedServers = new CopyOnWriteArrayList<>();
     final List<String> messages = new CopyOnWriteArrayList<>();
+    /**
+     * Everyone who joined once, online or not, with their stored data.
+     */
+    final Map<UUID, KnownPlayer> knownPlayers = new LinkedHashMap<>();
     volatile boolean maintenance = true;
 
     public FakeModuleApi() {
@@ -47,10 +60,22 @@ public class FakeModuleApi implements ModuleApi {
         }
         var lobby = servers.get("Lobby-1");
         var proxy = servers.get("Proxy-1");
+        var now = System.currentTimeMillis();
         for (var name : List.of("rexlNico", "Steve", "Alex")) {
-            players.add(new Player(UUID.nameUUIDFromBytes(name.getBytes()), name, lobby.name, proxy.name,
-                    System.currentTimeMillis() - 600_000));
+            var uuid = UUID.nameUUIDFromBytes(name.getBytes());
+            players.add(new Player(uuid, name, lobby.name, proxy.name, now - 600_000));
+            knownPlayers.put(uuid, new KnownPlayer(uuid, name, now - 86_400_000L * 30, now - 600_000));
         }
+        var steve = knownPlayers.get(UUID.nameUUIDFromBytes("Steve".getBytes()));
+        steve.data.put("example:coins", PlayerDataValues.encode("int", new JsonPrimitive(250)));
+        steve.data.put("example:rank", PlayerDataValues.encode("string", new JsonPrimitive("VIP")));
+        steve.data.put("example:friends", serialize(new ArrayList<>(List.of("Alex", "rexlNico"))));
+        steve.data.put("stats:bedwars", serialize(new Stats(42, 17)));
+        var herobrine = new KnownPlayer(UUID.nameUUIDFromBytes("Herobrine".getBytes()), "Herobrine",
+                now - 86_400_000L * 90, now - 86_400_000L * 2);
+        herobrine.data.put("example:coins", PlayerDataValues.encode("int", new JsonPrimitive(9000)));
+        herobrine.data.put("example:visits", PlayerDataValues.encode("int", new JsonPrimitive(12)));
+        knownPlayers.put(herobrine.uuid, herobrine);
     }
 
     private void addGroup(Group group) {
@@ -595,6 +620,106 @@ public class FakeModuleApi implements ModuleApi {
             this.minServers = minServers;
             this.fallback = fallback;
         }
+    }
+
+    @Override
+    public synchronized ModuleApiResult getPlayer(@NonNull String player) {
+        var known = findKnown(player);
+        if (known == null) {
+            return ModuleApiResult.notFound("Player " + player + " never joined the network");
+        }
+        var json = new JsonObject();
+        json.addProperty("uuid", known.uuid.toString());
+        json.addProperty("name", known.name);
+        json.addProperty("first_login", known.firstLogin);
+        json.addProperty("last_login", known.lastLogin);
+        var online = players.stream().filter(p -> p.uuid.equals(known.uuid)).findFirst();
+        json.addProperty("online", online.isPresent());
+        online.ifPresent(p -> {
+            json.addProperty("server", p.server);
+            var server = servers.get(p.server);
+            json.addProperty("server_group", server == null ? null : server.group.name);
+            json.addProperty("proxy", p.proxy);
+            json.addProperty("login", p.login);
+        });
+        var data = new JsonArray();
+        known.data.entrySet().stream().sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> data.add(PlayerDataValues.describe(
+                        new PlayerDatabaseData(known.uuid, entry.getKey(), entry.getValue()))));
+        json.add("data", data);
+        return ModuleApiResult.ok(json);
+    }
+
+    @Override
+    public synchronized ModuleApiResult setPlayerData(@NonNull String player, @NonNull String key, @Nullable String type,
+                                                      @NonNull JsonElement value) {
+        var known = findKnown(player);
+        if (known == null) {
+            return ModuleApiResult.notFound("Player " + player + " never joined the network");
+        }
+        if (key.isBlank() || key.length() > 255) {
+            return ModuleApiResult.invalid("The key must have 1 to 255 characters");
+        }
+        var current = known.data.get(key);
+        var chosen = type != null ? type : current == null ? null : PlayerDataValues.writableType(current);
+        try {
+            var bytes = PlayerDataValues.encode(chosen != null ? chosen : PlayerDataValues.guessType(value), value);
+            known.data.put(key, bytes);
+            return ModuleApiResult.ok(PlayerDataValues.describe(new PlayerDatabaseData(known.uuid, key, bytes)));
+        } catch (IllegalArgumentException e) {
+            return ModuleApiResult.invalid(e.getMessage());
+        }
+    }
+
+    @Override
+    public synchronized ModuleApiResult removePlayerData(@NonNull String player, @NonNull String key) {
+        var known = findKnown(player);
+        if (known == null) {
+            return ModuleApiResult.notFound("Player " + player + " never joined the network");
+        }
+        if (known.data.remove(key) == null) {
+            return ModuleApiResult.notFound(known.name + " has no value " + key);
+        }
+        return ModuleApiResult.ok();
+    }
+
+    private KnownPlayer findKnown(String player) {
+        return knownPlayers.values().stream()
+                .filter(known -> known.uuid.toString().equalsIgnoreCase(player) || known.name.equalsIgnoreCase(player))
+                .findFirst().orElse(null);
+    }
+
+    private static byte[] serialize(Serializable value) {
+        try {
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) {
+                out.writeObject(value);
+            }
+            return bytes.toByteArray();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    static final class KnownPlayer {
+        final UUID uuid;
+        final String name;
+        final long firstLogin;
+        final long lastLogin;
+        final Map<String, byte[]> data = new LinkedHashMap<>();
+
+        KnownPlayer(UUID uuid, String name, long firstLogin, long lastLogin) {
+            this.uuid = uuid;
+            this.name = name;
+            this.firstLogin = firstLogin;
+            this.lastLogin = lastLogin;
+        }
+    }
+
+    /**
+     * A plugin's own class: the master cannot read it.
+     */
+    record Stats(int kills, int deaths) implements Serializable {
     }
 
     static final class Server {

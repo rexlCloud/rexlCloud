@@ -15,6 +15,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.WebSocket;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -91,6 +93,9 @@ class RestApiTest {
         var forbidden = send("POST", "/servers/Lobby-1/stop", token, null);
         assertEquals(403, forbidden.statusCode());
         assertTrue(json(forbidden).getAsJsonObject().get("message").getAsString().contains("STOP_SERVER"));
+        assertEquals(403, send("GET", "/players/Steve", token, null).statusCode());
+        assertEquals(403, send("PUT", "/players/Steve/data/example:coins", token, "{\"value\":1}").statusCode());
+        assertEquals(403, send("DELETE", "/players/Steve/data/example:coins", token, null).statusCode());
     }
 
     @Test
@@ -192,6 +197,51 @@ class RestApiTest {
         assertEquals(400, send("POST", "/players/not-a-uuid/kick", adminToken, null).statusCode());
         assertEquals(200, send("POST", "/players/" + uuid + "/kick", adminToken, "{\"message\":\"Bye\"}").statusCode());
         assertEquals(404, send("POST", "/players/" + uuid + "/kick", adminToken, null).statusCode());
+    }
+
+    @Test
+    void readsAndWritesPlayerData() throws Exception {
+        var steve = json(send("GET", "/players/steve", adminToken, null)).getAsJsonObject().getAsJsonObject("data");
+        assertEquals("Steve", steve.get("name").getAsString());
+        assertTrue(steve.get("online").getAsBoolean());
+        var values = steve.getAsJsonArray("data").asList().stream().map(JsonElement::getAsJsonObject).toList();
+        var coins = value(values, "example:coins");
+        assertEquals("int", coins.get("type").getAsString());
+        assertEquals(250, coins.get("value").getAsInt());
+        assertTrue(coins.get("editable").getAsBoolean());
+        var friends = value(values, "example:friends");
+        assertEquals("list", friends.get("type").getAsString());
+        assertEquals("Alex", friends.getAsJsonArray("value").get(0).getAsString());
+        assertFalse(friends.get("editable").getAsBoolean());
+        var stats = value(values, "stats:bedwars");
+        assertFalse(stats.get("readable").getAsBoolean(), "a plugin's own class is not read");
+        assertEquals(FakeModuleApi.Stats.class.getName(), stats.get("type").getAsString());
+
+        // Offline players by UUID; the type of an existing value is kept
+        var herobrine = UUID.nameUUIDFromBytes("Herobrine".getBytes()).toString();
+        var offline = json(send("GET", "/players/" + herobrine, adminToken, null)).getAsJsonObject().getAsJsonObject("data");
+        assertFalse(offline.get("online").getAsBoolean());
+        var set = send("PUT", "/players/" + herobrine + "/data/example:coins", adminToken, "{\"value\":\"9100\"}");
+        assertEquals(200, set.statusCode());
+        var stored = json(set).getAsJsonObject().getAsJsonObject("data");
+        assertEquals("int", stored.get("type").getAsString());
+        assertEquals(9100, stored.get("value").getAsInt());
+
+        assertEquals(200, send("PUT", "/players/Herobrine/data/example:title", adminToken,
+                "{\"type\":\"string\",\"value\":\"Legend\"}").statusCode());
+        assertEquals(400, send("PUT", "/players/Herobrine/data/example:visits", adminToken,
+                "{\"type\":\"int\",\"value\":\"many\"}").statusCode());
+        assertEquals(400, send("PUT", "/players/Herobrine/data/example:visits", adminToken,
+                "{\"type\":\"object\",\"value\":1}").statusCode());
+        assertEquals(400, send("PUT", "/players/Herobrine/data/example:visits", adminToken, "{}").statusCode());
+        assertEquals(200, send("DELETE", "/players/Herobrine/data/example:visits", adminToken, null).statusCode());
+        assertEquals(404, send("DELETE", "/players/Herobrine/data/example:visits", adminToken, null).statusCode());
+        assertEquals(404, send("GET", "/players/Nobody", adminToken, null).statusCode());
+        assertEquals(404, send("PUT", "/players/Nobody/data/x", adminToken, "{\"value\":1}").statusCode());
+    }
+
+    private static JsonObject value(List<JsonObject> values, String key) {
+        return values.stream().filter(v -> v.get("key").getAsString().equals(key)).findFirst().orElseThrow();
     }
 
     @Test

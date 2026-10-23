@@ -5,6 +5,7 @@ import com.google.gson.JsonPrimitive;
 import java.nio.file.Path;
 import de.rexlcloud.master.server.TemplateFiles;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import de.rexlcloud.core.api.module.ModuleApi;
 import de.rexlcloud.core.api.module.ModuleApiResult;
@@ -19,7 +20,10 @@ import de.rexlcloud.core.network.packets.ServerExecuteCommandPacket;
 import de.rexlcloud.core.network.packets.ServerStopPacket;
 import de.rexlcloud.core.server.AbstractServer;
 import de.rexlcloud.core.server.ServerType;
+import de.rexlcloud.core.api.CloudOfflinePlayer;
 import de.rexlcloud.core.api.CloudText;
+import de.rexlcloud.core.api.PlayerDataValues;
+import de.rexlcloud.core.api.PlayerDatabaseData;
 import de.rexlcloud.core.config.MessageKey;
 import de.rexlcloud.core.server.files.ServerJar;
 import de.rexlcloud.core.server.template.Templates;
@@ -38,8 +42,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -574,6 +582,103 @@ public class MasterModuleApi implements ModuleApi {
         var json = CloudText.toJson(message);
         return sendToPlayerProxy(uuid, proxyName -> new PacketContainer(PacketType.PLAYER_SEND_MESSAGE,
                 new PlayerMessagePacket(uuid, proxyName, json)));
+    }
+
+    private static final int MAX_DATA_KEY_LENGTH = 255;
+
+    @Override
+    public ModuleApiResult getPlayer(@NonNull String player) {
+        var found = findPlayer(player);
+        if (found.isEmpty()) {
+            return ModuleApiResult.notFound("Player " + player + " never joined the network");
+        }
+        var offline = found.get();
+        var json = new JsonObject();
+        json.addProperty("uuid", offline.getUuid().toString());
+        json.addProperty("name", offline.getName());
+        json.addProperty("first_login", offline.getFirstLogin());
+        json.addProperty("last_login", offline.getLastLogin());
+        var online = RexlCloudMaster.getInstance().getPlayerManager().getPlayer(offline.getUuid());
+        json.addProperty("online", online.isPresent());
+        online.ifPresent(onlinePlayer -> {
+            json.addProperty("server", onlinePlayer.getServer() == null ? null : onlinePlayer.getServer().getName());
+            json.addProperty("server_group", onlinePlayer.getServer() == null || onlinePlayer.getServer().getServerGroup() == null
+                    ? null : onlinePlayer.getServer().getServerGroup().getName());
+            json.addProperty("proxy", onlinePlayer.getProxyServer() == null ? null : onlinePlayer.getProxyServer().getName());
+            json.addProperty("login", onlinePlayer.getLogin());
+        });
+        var data = new JsonArray();
+        offline.getData().stream()
+                .sorted(Comparator.comparing(PlayerDatabaseData::getKey))
+                .forEach(entry -> data.add(PlayerDataValues.describe(entry)));
+        json.add("data", data);
+        return ModuleApiResult.ok(json);
+    }
+
+    @Override
+    public ModuleApiResult setPlayerData(@NonNull String player, @NonNull String key, @Nullable String type,
+                                         @NonNull JsonElement value) {
+        if (key.isBlank() || key.length() > MAX_DATA_KEY_LENGTH) {
+            return ModuleApiResult.invalid("The key must have 1 to " + MAX_DATA_KEY_LENGTH + " characters");
+        }
+        var found = findPlayer(player);
+        if (found.isEmpty()) {
+            return ModuleApiResult.notFound("Player " + player + " never joined the network");
+        }
+        var offline = found.get();
+        var current = offline.getData().stream().filter(entry -> entry.getKey().equals(key)).findFirst();
+        var chosenType = type != null ? type
+                : current.map(entry -> PlayerDataValues.writableType(entry.getValue()))
+                .orElseGet(() -> PlayerDataValues.guessType(value));
+        if (chosenType == null) {
+            chosenType = PlayerDataValues.guessType(value);
+        }
+        byte[] bytes;
+        try {
+            bytes = PlayerDataValues.encode(chosenType, value);
+        } catch (IllegalArgumentException e) {
+            return ModuleApiResult.invalid(e.getMessage());
+        }
+        await(RexlCloudMaster.getInstance().getPlayerManager().updateData(offline.getUuid(), key, bytes, null));
+        return ModuleApiResult.ok(PlayerDataValues.describe(new PlayerDatabaseData(offline.getUuid(), key, bytes)));
+    }
+
+    @Override
+    public ModuleApiResult removePlayerData(@NonNull String player, @NonNull String key) {
+        var found = findPlayer(player);
+        if (found.isEmpty()) {
+            return ModuleApiResult.notFound("Player " + player + " never joined the network");
+        }
+        var offline = found.get();
+        if (!offline.hasData(key)) {
+            return ModuleApiResult.notFound(offline.getName() + " has no value " + key);
+        }
+        await(RexlCloudMaster.getInstance().getPlayerManager().updateData(offline.getUuid(), key, null, null));
+        return ModuleApiResult.ok();
+    }
+
+    private static Optional<CloudOfflinePlayer> findPlayer(String player) {
+        var playerManager = RexlCloudMaster.getInstance().getPlayerManager();
+        UUID uuid = null;
+        try {
+            uuid = UUID.fromString(player);
+        } catch (IllegalArgumentException e) {
+            // a name
+        }
+        return await(uuid != null ? playerManager.getOfflinePlayer(uuid) : playerManager.getOfflinePlayer(player));
+    }
+
+    private static <T> T await(CompletableFuture<T> future) {
+        try {
+            return future.get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for the database", e);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("The database failed: " + e.getCause().getMessage(), e.getCause());
+        } catch (TimeoutException e) {
+            throw new IllegalStateException("The database did not answer within 10 seconds", e);
+        }
     }
 
     private static final int MAX_MOTD_LENGTH = 1000;

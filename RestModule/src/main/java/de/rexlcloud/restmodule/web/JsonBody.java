@@ -37,6 +37,17 @@ public class JsonBody {
         }
     }
 
+    /**
+     * @return the field as it is in the JSON (string, number, boolean, ...)
+     */
+    public JsonElement requireValue(String name) {
+        var element = get(name);
+        if (element == null || element.isJsonNull()) {
+            throw ApiException.badRequest("The field '" + name + "' is required");
+        }
+        return element;
+    }
+
     public String requireString(String name) {
         var value = optionalString(name);
         if (value == null || value.isBlank()) {

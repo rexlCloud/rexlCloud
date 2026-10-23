@@ -8,9 +8,11 @@ import io.javalin.http.Context;
 
 import java.util.UUID;
 
+import static io.javalin.apibuilder.ApiBuilder.delete;
 import static io.javalin.apibuilder.ApiBuilder.get;
 import static io.javalin.apibuilder.ApiBuilder.path;
 import static io.javalin.apibuilder.ApiBuilder.post;
+import static io.javalin.apibuilder.ApiBuilder.put;
 
 public class PlayerRoutes {
 
@@ -21,6 +23,29 @@ public class PlayerRoutes {
             get(ctx -> {
                 Api.require(ctx, Permission.SEE_PLAYERS);
                 ctx.json(Api.moduleApi().getPlayers());
+            });
+            // {player}: UUID or name; the player only has to have joined once
+            get("{player}", ctx -> {
+                Api.require(ctx, Permission.SEE_PLAYERS);
+                Api.respond(ctx, Api.moduleApi().getPlayer(ctx.pathParam("player")));
+            });
+            path("{player}/data/{key}", () -> {
+                put(ctx -> {
+                    Api.require(ctx, Permission.MANAGE_PLAYERS);
+                    var player = ctx.pathParam("player");
+                    var key = ctx.pathParam("key");
+                    var body = JsonBody.of(ctx);
+                    Api.respond(ctx, Api.moduleApi().setPlayerData(player, key, body.optionalString("type"),
+                            body.requireValue("value")));
+                    Api.audit(ctx, "set the player data %s of %s", key, player);
+                });
+                delete(ctx -> {
+                    Api.require(ctx, Permission.MANAGE_PLAYERS);
+                    var player = ctx.pathParam("player");
+                    var key = ctx.pathParam("key");
+                    Api.respond(ctx, Api.moduleApi().removePlayerData(player, key));
+                    Api.audit(ctx, "removed the player data %s of %s", key, player);
+                });
             });
             path("{uuid}", () -> {
                 post("kick", ctx -> {

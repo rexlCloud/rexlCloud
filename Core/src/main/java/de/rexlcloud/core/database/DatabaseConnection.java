@@ -7,6 +7,8 @@ import org.intellij.lang.annotations.Language;
 import org.jetbrains.annotations.Nullable;
 
 import javax.sql.DataSource;
+import java.sql.Blob;
+import java.sql.Clob;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -138,6 +140,28 @@ public class DatabaseConnection {
     }
 
     /**
+     * Reads BLOB and CLOB values while the result set is open: they may only be readable until the connection is
+     * closed or returned to the pool.
+     */
+    private static Object detach(Object value) throws SQLException {
+        if (value instanceof Blob blob) {
+            try {
+                return blob.getBytes(1, (int) blob.length());
+            } finally {
+                blob.free();
+            }
+        }
+        if (value instanceof Clob clob) {
+            try {
+                return clob.getSubString(1, (int) clob.length());
+            } finally {
+                clob.free();
+            }
+        }
+        return value;
+    }
+
+    /**
      * Runs a SELECT and returns its rows, each with one value per column.
      */
     CompletableFuture<List<Object[]>> query(TableMapping.Query query) {
@@ -150,7 +174,7 @@ public class DatabaseConnection {
                     while (resultSet.next()) {
                         var row = new Object[columns];
                         for (int i = 0; i < columns; i++) {
-                            row[i] = resultSet.getObject(i + 1);
+                            row[i] = detach(resultSet.getObject(i + 1));
                         }
                         rows.add(row);
                     }

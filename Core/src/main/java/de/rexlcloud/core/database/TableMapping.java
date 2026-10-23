@@ -304,6 +304,12 @@ final class TableMapping<T> {
                         where.add(column.quoted() + " IS NULL");
                     } else if (filter.getValue() == null && filter.getType() == QueryType.WHERE_MORE_OR_LESS_THAN) {
                         where.add(column.quoted() + " IS NOT NULL");
+                    } else if (filter.getType() == QueryType.WHERE_EQUALS_IGNORE_CASE) {
+                        if (!(filter.getValue() instanceof String)) {
+                            throw new IllegalArgumentException("WHERE_EQUALS_IGNORE_CASE needs a text, got " + filter.getValue());
+                        }
+                        where.add("LOWER(" + column.quoted() + ") = LOWER(?)");
+                        parameters.add(column.codec().encode(filter.getValue()));
                     } else {
                         where.add(column.quoted() + " " + filter.getType().getSqlSyntax() + " ?");
                         parameters.add(column.codec().encode(filter.getValue()));

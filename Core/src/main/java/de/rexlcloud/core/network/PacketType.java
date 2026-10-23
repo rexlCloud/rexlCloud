@@ -70,5 +70,6 @@ public enum PacketType implements Serializable {
     SERVER_PORT_IN_USE,
     SERVER_SAVE_TEMPLATE,
     TEMPLATE_UPLOAD,
+    API_REQUEST_GET_OFFLINE_PLAYER,
 
 }

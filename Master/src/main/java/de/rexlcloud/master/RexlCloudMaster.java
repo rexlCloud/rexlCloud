@@ -157,7 +157,7 @@ public class RexlCloudMaster {
         // Servers of deleted groups are not started again
         serverManager.setGroupExists(group -> serverGroupManager.existServerGroup(group.getName()));
         templateSync.start();
-        playerManager = new PlayerManager();
+        playerManager = new PlayerManager(databaseConnection.getObjectHandler());
         serverJarManager = new ServerJarManager();
 
         try {

@@ -11,6 +11,10 @@ public enum QueryType {
     ORDER_BY_ASC("ORDER BY"),
     ORDER_BY_DESC("ORDER BY"),
     WHERE_EQUALS_TO("="),
+    /**
+     * Equal to the text, ignoring upper and lower case (on every database).
+     */
+    WHERE_EQUALS_IGNORE_CASE("="),
     WHERE_LESS_THAN("<"),
     WHERE_LESS_OR_EQUALS_THAN("<="),
     WHERE_MORE_THAN(">"),

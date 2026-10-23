@@ -49,6 +49,7 @@ public class MasterPacketHandler {
         handlers.add(new PlayerChangeServerHandler());
         handlers.add(new PlayerChangeServerTeleportHandler());
         handlers.add(new PlayerDataUpdateHandler());
+        handlers.add(new GetOfflinePlayerHandler());
         handlers.add(new PlayerTeleportHandler());
         handlers.add(new StartServerHandler());
         handlers.add(new StopServerHandler());

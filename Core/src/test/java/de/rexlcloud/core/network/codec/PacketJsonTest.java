@@ -1,6 +1,8 @@
 package de.rexlcloud.core.network.codec;
 
 import com.google.gson.JsonParseException;
+import de.rexlcloud.core.api.CloudOfflinePlayer;
+import de.rexlcloud.core.api.PlayerDatabaseData;
 import de.rexlcloud.core.api.Server;
 import de.rexlcloud.core.api.ServerLocation;
 import de.rexlcloud.core.api.Wrapper;
@@ -210,6 +212,29 @@ class PacketJsonTest {
         assertEquals("Lobby", receivedServer.getServerGroup().getName());
         assertEquals("Lobby-1", ((Server) ((List<?>) list.getResponse()).getFirst()).getName());
         assertEquals("world", ((ServerLocation) location.getResponse()).getWorldName());
+    }
+
+    @Test
+    void offlinePlayersArriveWithTheirData() throws Exception {
+        var bytes = new java.io.ByteArrayOutputStream();
+        try (var out = new java.io.ObjectOutputStream(bytes)) {
+            out.writeObject(250);
+        }
+        var data = new ArrayList<>(List.of(new PlayerDatabaseData(KEY, "coins", bytes.toByteArray())));
+        var player = new CloudOfflinePlayer("Notch", KEY, 1_000L, 2_000L, false, data);
+
+        var received = (ApiResponsePacket) overTheWire(new PacketContainer(PacketType.API_REQUEST_GET_OFFLINE_PLAYER,
+                new ApiResponsePacket(1, "Lobby-1", player))).getPacket();
+
+        var offline = assertInstanceOf(CloudOfflinePlayer.class, received.getResponse());
+        assertEquals("Notch", offline.getName());
+        assertEquals(KEY, offline.getUuid());
+        assertEquals(1_000L, offline.getFirstLogin());
+        assertEquals(2_000L, offline.getLastLogin());
+        assertFalse(offline.isOnline());
+        assertEquals(List.of("coins"), offline.getDataKeys());
+        assertEquals(250, offline.<Integer>getData("coins").orElseThrow());
+        assertTrue(offline.getData("missing").isEmpty());
     }
 
     @Test

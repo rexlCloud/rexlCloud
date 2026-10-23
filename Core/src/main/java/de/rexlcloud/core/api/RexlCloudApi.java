@@ -418,10 +418,38 @@ public class RexlCloudApi {
     }
 
     /**
-     * Internal: sends changed player data to the master.
+     * A player who joined the network at least once, online or not, with the data plugins stored for them.
+     *
+     * @param uuid UUID of the player
+     * @return the player as the master stored them; completes exceptionally with
+     *         {@link de.rexlcloud.core.api.exceptions.PlayerNotFoundException} if they never joined
      */
-    protected CompletableFuture<Boolean> sendPlayerDataUpdate(Player player, String key, byte[] bytes) {
-        return createRequest(PacketType.API_REQUEST_PLAYER_DATA_UPDATE, player.getUuid(), key, bytes);
+    public CompletableFuture<CloudOfflinePlayer> getOfflinePlayer(@NonNull UUID uuid) {
+        return createRequest(PacketType.API_REQUEST_GET_OFFLINE_PLAYER, uuid);
+    }
+
+    /**
+     * A player who joined the network at least once, online or not, with the data plugins stored for them.
+     *
+     * @param name the name the player had when they last joined (case-insensitive)
+     * @return the player as the master stored them; completes exceptionally with
+     *         {@link de.rexlcloud.core.api.exceptions.PlayerNotFoundException} if no player joined with this name
+     */
+    public CompletableFuture<CloudOfflinePlayer> getOfflinePlayer(@NonNull String name) {
+        return createRequest(PacketType.API_REQUEST_GET_OFFLINE_PLAYER, name);
+    }
+
+    /**
+     * Internal: sends changed player data ({@code null} removes it) to the master, which saves it and passes it on
+     * to the other servers.
+     */
+    protected CompletableFuture<Boolean> sendPlayerDataUpdate(PlayerDataHolder holder, String key, byte[] bytes) {
+        var cached = playerObjects.get(holder.getUuid());
+        if (cached != null && cached != holder) {
+            // Changed through a CloudOfflinePlayer while the player is online here; the master skips this server
+            cached.updateData(key, bytes);
+        }
+        return createRequest(PacketType.API_REQUEST_PLAYER_DATA_UPDATE, holder.getUuid(), key, bytes);
     }
 
     /**

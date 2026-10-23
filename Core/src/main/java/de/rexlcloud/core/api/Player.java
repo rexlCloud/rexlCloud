@@ -8,9 +8,7 @@ import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.*;
 import java.util.ArrayList;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -20,10 +18,11 @@ import java.util.concurrent.CompletableFuture;
  * The object is updated by the cloud while the player is online (e.g. {@link #getServer()} after a server switch).
  * Actions like {@link #connect(String)} or {@link #sendMessage(Component)} are carried out by the player's proxy.
  * Players can also have data that plugins store for them in the cloud's database ({@link #setData}); it stays when
- * they leave and is available on every server.
+ * they leave and is available on every server, and through {@link RexlCloudApi#getOfflinePlayer(UUID)} while they
+ * are offline.
  */
 @Getter
-public class Player implements Serializable {
+public class Player extends PlayerDataHolder {
 
     /**
      * The player's name.
@@ -72,88 +71,6 @@ public class Player implements Serializable {
     protected void update(@NonNull Player player, @NonNull Server server) {
         this.server = server;
         this.login = player.getLogin();
-    }
-
-    private static final StackWalker CALLER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
-
-    /**
-     * Data a plugin stored for this player. Only JDK value types and classes of the calling plugin are read; data
-     * of other types is treated as missing.
-     */
-    @SuppressWarnings("unchecked")
-    public <T extends Serializable> Optional<T> getData(String key) {
-        var caller = CALLER.getCallerClass().getClassLoader();
-        return data.stream().filter(playerDatabaseData -> playerDatabaseData.getKey().equals(key)).findAny()
-                .map(playerDatabaseData -> {
-                    try {
-                        return (T) SafeObjectInput.read(playerDatabaseData.getValue(), caller);
-                    } catch (IOException | ClassNotFoundException | ClassCastException e) {
-                        System.err.println("[rexlCloud] Could not read the player data " + key + " of " + name
-                                + ": " + e.getMessage());
-                        return null;
-                    }
-                });
-    }
-
-    /**
-     * Stores data for the player in the cloud's database, replacing a value with the same key. The value is
-     * serialized with Java serialization; only JDK value types (strings, numbers, collections, time types) and classes of
-     * the plugin itself can be read back with {@link #getData(String)}.
-     *
-     * @param key   name of the value, e.g. {@code "coins"}
-     * @param value the value
-     * @param <T>   type of the value
-     * @return {@code false} if the value could not be serialized
-     */
-    public <T extends Serializable> boolean setData(@NonNull String key, @NonNull T value) {
-        try {
-            var baos = new ByteArrayOutputStream();
-            var oos = new ObjectOutputStream(baos);
-            oos.writeObject(value);
-            var bytes = baos.toByteArray();
-
-            this.data.stream().filter(playerDatabaseData -> playerDatabaseData.getKey().equals(key)).findAny()
-                    .ifPresentOrElse(playerDatabaseData -> playerDatabaseData.setValue(bytes),
-                            () -> data.add(new PlayerDatabaseData(uuid, key, bytes)));
-
-            RexlCloudApi.getInstance().sendPlayerDataUpdate(this, key, bytes);
-        } catch (Exception e) {
-            System.out.println("Could not serialize data");
-            e.printStackTrace();
-            return false;
-        }
-        return true;
-    }
-
-    /**
-     * @param key name of a value
-     * @return whether the player has data under this key
-     */
-    public boolean hasData(String key) {
-       return data.stream().anyMatch(playerDatabaseData -> playerDatabaseData.getKey().equals(key));
-    }
-
-    /**
-     * Removes the player's data under this key from the database.
-     *
-     * @param key name of the value
-     */
-    public void removeData(String key) {
-        data.removeIf(playerDatabaseData -> playerDatabaseData.getKey().equals(key));
-        RexlCloudApi.getInstance().sendPlayerDataUpdate(this, key, null);
-    }
-
-    /**
-     * Internal: applies data changed on another server.
-     */
-    protected void updateData(String key, byte[] data) {
-        if (data == null) {
-            this.data.removeIf(playerDatabaseData -> playerDatabaseData.getKey().equals(key));
-            return;
-        }
-        this.data.stream().filter(playerDatabaseData -> playerDatabaseData.getKey().equals(key)).findAny()
-                .ifPresentOrElse(playerDatabaseData -> playerDatabaseData.setValue(data),
-                        () -> this.data.add(new PlayerDatabaseData(uuid, key, data)));
     }
 
     /**
